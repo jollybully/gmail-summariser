@@ -4,49 +4,49 @@ const ALLOWED_DOMAIN = "yourdomain.com";
 const GEMINI_API_KEY = "YOUR_API_KEY";
 
 function checkForEmailsToProcess() {
-	const searchQuery = `to:${SUMMARY_EMAIL} newer_than:10m`;
-	const threads = GmailApp.search(searchQuery);
+  const searchQuery = `to:${SUMMARY_EMAIL} newer_than:10m`;
+  const threads = GmailApp.search(searchQuery);
 
-	for (const thread of threads) {
-		const latestMessage = thread.getMessages()[thread.getMessages().length - 1];
-		const sender = latestMessage.getFrom();
-		const emailMatch = sender.match(/<(.+?)>/);
-		const emailAddress = emailMatch ? emailMatch[1] : sender;
+  for (const thread of threads) {
+    const latestMessage = thread.getMessages()[thread.getMessages().length - 1];
+    const sender = latestMessage.getFrom();
+    const emailMatch = sender.match(/<(.+?)>/);
+    const emailAddress = emailMatch ? emailMatch[1] : sender;
 
-		if (!emailAddress.toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`)) {
-			Logger.log(`Skipping email from unauthorized sender: ${emailAddress}`);
-			continue;
-		}
+    if (!emailAddress.toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`)) {
+      Logger.log(`Skipping email from unauthorized sender: ${emailAddress}`);
+      continue;
+    }
 
-		processEmail(latestMessage, thread);
-	}
+    processEmail(latestMessage, thread);
+  }
 }
 
 function processEmail(message, thread) {
-	try {
-		const messages = thread.getMessages();
-		const threadContent = messages[0].getPlainBody();
+  try {
+    const messages = thread.getMessages();
+    const threadContent = messages[0].getPlainBody();
 
-		const emailData = {
-			subject: messages[0].getSubject(),
-			sender: message.getFrom(),
-			body: threadContent,
-		};
+    const emailData = {
+      subject: messages[0].getSubject(),
+      sender: message.getFrom(),
+      body: threadContent,
+    };
 
-		const summary = generateSummary(emailData);
-		sendSummaryResponse(emailData, summary);
+    const summary = generateSummary(emailData);
+    sendSummaryResponse(emailData, summary);
 
-		// Delete the original email and log it
-		Logger.log(`Moving thread to trash: ${emailData.subject}`);
-		thread.moveToTrash();
-		Logger.log("Thread successfully moved to trash");
-	} catch (error) {
-		Logger.log(`Error processing email: ${error.toString()}`);
-	}
+    // Delete the original email and log it
+    Logger.log(`Moving thread to trash: ${emailData.subject}`);
+    thread.moveToTrash();
+    Logger.log("Thread successfully moved to trash");
+  } catch (error) {
+    Logger.log(`Error processing email: ${error.toString()}`);
+  }
 }
 
 function generateSummary(emailData) {
-	const prompt = `
+  const prompt = `
 You are an email summarization assistant. Please provide a clear and concise summary of the following email thread.
 
 Important Guidelines:
@@ -81,39 +81,93 @@ ACTION ITEMS (if any):
 
 Note: If the email contains only greetings, signatures, or automated content, respond with "This email contains no substantial content to summarize."`;
 
-	return callGeminiAPI(prompt);
+  return callGeminiAPI(prompt);
 }
 
 function callGeminiAPI(prompt) {
-	const apiEndpoint =
-		"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent";
-	const options = {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			"x-goog-api-key": GEMINI_API_KEY,
-		},
-		payload: JSON.stringify({
-			contents: [{ parts: [{ text: prompt }] }],
-		}),
-	};
+  const apiEndpoint =
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent";
+  const options = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": GEMINI_API_KEY,
+    },
+    payload: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+    }),
+  };
 
-	const maxRetries = 3;
-	const initialDelayMs = 1000;
+  const maxRetries = 3;
+  const initialDelayMs = 1000;
 
-	for (let attempt = 0; attempt < maxRetries; attempt++) {
-		try {
-			const response = UrlFetchApp.fetch(apiEndpoint, options);
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = UrlFetchApp.fetch(apiEndpoint, options);
 
-			if (response.getResponseCode() === 429) {
-				const backoffMs = initialDelayMs * Math.pow(2, attempt);
-				Utilities.sleep(backoffMs);
-				continue;
-			}
+      if (response.getResponseCode() === 429) {
+        const backoffMs = initialDelayMs * Math.pow(2, attempt);
+        Utilities.sleep(backoffMs);
+        continue;
+      }
 
-			const jsonResponse = JSON.parse(response.getContentText());
-			return jsonResponse.candidates[0].content.parts[0].text;
-		} catch (error) {
-			if (attempt === maxRetries - 1) {
-				throw new Error(
-					`Failed to call Gemini API after ${maxRetries} attempts: ${error.toString()}`
+      const jsonResponse = JSON.parse(response.getContentText());
+      return jsonResponse.candidates[0].content.parts[0].text;
+    } catch (error) {
+      if (attempt === maxRetries - 1) {
+        throw new Error(
+          `Failed to call Gemini API after ${maxRetries} attempts: ${error.toString()}`
+        );
+      }
+      const backoffMs = initialDelayMs * Math.pow(2, attempt);
+      Utilities.sleep(backoffMs);
+    }
+  }
+}
+
+function sendSummaryResponse(emailData, summary) {
+  try {
+    const emailMatch = emailData.sender.match(/<(.+?)>/);
+    const cleanRecipientEmail = emailMatch ? emailMatch[1] : emailData.sender;
+
+    // Find the original thread
+    const query = `subject:"${emailData.subject}" from:${cleanRecipientEmail}`;
+    const threads = GmailApp.search(query, 0, 1);
+
+    if (threads.length > 0) {
+      // Reply only to the person who forwarded it
+      threads[0].reply("", {
+        from: SUMMARY_EMAIL,
+        replyTo: SUMMARY_EMAIL,
+        subject: "Summary",
+        htmlBody: summary.replace(/\n/g, "<br>"),
+        to: cleanRecipientEmail, // Explicitly set recipient
+      });
+      Logger.log("Sent summary as reply to original thread");
+    } else {
+      // Fallback to sending as new email if thread not found
+      GmailApp.sendEmail(
+        cleanRecipientEmail,
+        `Summary: ${emailData.subject}`,
+        summary,
+        {
+          from: SUMMARY_EMAIL,
+          replyTo: SUMMARY_EMAIL,
+        }
+      );
+      Logger.log("Sent summary as new email (original thread not found)");
+    }
+  } catch (error) {
+    Logger.log(`Error in sendSummaryResponse: ${error.toString()}`);
+  }
+}
+
+function createTrigger() {
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach((trigger) => ScriptApp.deleteTrigger(trigger));
+
+  ScriptApp.newTrigger("checkForEmailsToProcess")
+    .timeBased()
+    .everyMinutes(1)
+    .create();
+}
