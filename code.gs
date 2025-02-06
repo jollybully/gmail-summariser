@@ -136,11 +136,10 @@ function sendSummaryResponse(emailData, summary) {
 
     if (threads.length > 0) {
       // Reply only to the person who forwarded it
-      threads[0].reply("", {
+      threads[0].reply(summary, {
         from: SUMMARY_EMAIL,
         replyTo: SUMMARY_EMAIL,
-        subject: "Summary",
-        htmlBody: summary.replace(/\n/g, "<br>"),
+        subject: `Re: ${emailData.subject}`,
         to: cleanRecipientEmail, // Explicitly set recipient
       });
       Logger.log("Sent summary as reply to original thread");
@@ -148,7 +147,7 @@ function sendSummaryResponse(emailData, summary) {
       // Fallback to sending as new email if thread not found
       GmailApp.sendEmail(
         cleanRecipientEmail,
-        `Summary: ${emailData.subject}`,
+        `Re: ${emailData.subject}`,
         summary,
         {
           from: SUMMARY_EMAIL,
