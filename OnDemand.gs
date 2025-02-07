@@ -86,7 +86,7 @@ Note: If the email contains only greetings, signatures, or automated content, re
 
 function callGeminiAPI(prompt) {
   const apiEndpoint =
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent";
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent";
   const options = {
     method: "POST",
     headers: {

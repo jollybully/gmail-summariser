@@ -80,17 +80,20 @@ A Google Apps Script that automatically generates AI-powered summaries of emails
 ## Requirements
 
 - Google Account (Gmail or Google Workspace)
-- Google Gemini API key (using Gemini Pro 1.5 model)
+- Google Gemini API key (using Gemini-2.0-Flash-001 model)
 - Google Apps Script environment
 
 ### Note on AI Model
 
-The script uses Gemini Pro 1.5 which provides significantly better email summarization compared to other models like Gemini Flash. The improvements include:
+The script uses Gemini-2.0-Flash-001 which provides excellent email summarization capabilities:
 
-- More accurate identification of key points
-- Better handling of email threads
-- More reliable extraction of action items
-- Better filtering of email signatures and footers
+- Fast response times (typically under 2 seconds)
+- Accurate identification of key points and action items
+- Efficient handling of email threads
+- Good filtering of email signatures and footers
+- Cost-effective for high-volume processing
+
+While Gemini Pro 1.5 is also supported, the Flash model provides a better balance of speed and accuracy for email summarization tasks.
 
 ## Security Notes
 
